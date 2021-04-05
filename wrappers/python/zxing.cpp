@@ -85,9 +85,9 @@ Result read_barcode(
 	return ReadBarcode({bytes, width, height, imgfmt, width * channels, channels}, hints);
 }
 
-Image write_barcode(BarcodeFormat format, std::string text, int width, int height, int quiet_zone, int eccLevel)
+Image write_barcode(BarcodeFormat format, std::string text, int width, int height, int quiet_zone, int ecc_level)
 {
-	auto writer = MultiFormatWriter(format).setMargin(quiet_zone).setEccLevel(eccLevel);
+	auto writer = MultiFormatWriter(format).setMargin(quiet_zone).setEccLevel(ecc_level);
 	auto bitmap = writer.encode(TextUtfEncoding::FromUtf8(text), width, height);
 
 	auto result = Image({bitmap.height(), bitmap.width()});
@@ -101,7 +101,10 @@ Image write_barcode(BarcodeFormat format, std::string text, int width, int heigh
 
 PYBIND11_MODULE(zxing, m)
 {
-	m.doc() = "python bindings for zxing-cpp";
+	m.doc() =
+	    "python bindings for zxing-cpp\n"
+	    "=============================\n\n"
+	    ;
 	py::enum_<BarcodeFormat>(m, "BarcodeFormat", py::arithmetic{}, "Enumeration of zxing supported barcode formats")
 		.value("Aztec", BarcodeFormat::Aztec)
 		.value("Codabar", BarcodeFormat::Codabar)
@@ -127,7 +130,7 @@ PYBIND11_MODULE(zxing, m)
 		// see https://github.com/pybind/pybind11/issues/2221
 		.def("__or__", [](BarcodeFormat f1, BarcodeFormat f2){ return f1 | f2; })
 		.def("__or__", [](BarcodeFormats fs, BarcodeFormat f){ return fs | f; });
-	py::class_<BarcodeFormats>(m, "BarcodeFormats")
+	py::class_<BarcodeFormats>(m, "BarcodeFormats", "Set of :py:class:`zxing.BarcodeFormat` (s)")
 		.def("__repr__", py::overload_cast<BarcodeFormats>(&ToString))
 		.def("__str__", py::overload_cast<BarcodeFormats>(&ToString))
 		.def("__eq__", [](BarcodeFormats f1, BarcodeFormats f2){ return f1 == f2; })
@@ -208,11 +211,11 @@ PYBIND11_MODULE(zxing, m)
 		py::arg("is_pure") = false,
 		py::arg("ean_add_on_symbol") = EanAddOnSymbol::Ignore,
 		"Read (decode) a barcode from a numpy BGR or grayscale image array or from a PIL image.\n\n"
-		":type image: numpy.ndarray|PIL.Image.Image\n"
+		":type image: Union[numpy.ndarray,PIL.Image.Image]\n"
 		":param image: The image object to decode. The image can be either:\n"
 		"  - a numpy array containing image either in grayscale (1 byte per pixel) or BGR mode (3 bytes per pixel)\n"
 		"  - a PIL Image\n"
-		":type formats: zxing.BarcodeFormat|zxing.BarcodeFormats\n"
+		":type formats: Union[zxing.BarcodeFormat,zxing.BarcodeFormats]\n"
 		":param formats: the format(s) to decode. If ``None``, decode all formats.\n"
 		":type try_harder: bool\n"
 		":param try_harder: if ``True`` (the default), spend more time to try to find a barcode; if ``False``, \n"
@@ -222,15 +225,15 @@ PYBIND11_MODULE(zxing, m)
 		"  if ``False``, it will not search for 90° / 270° rotated barcodes.\n"
 		":type binarizer: zxing.Binarizer\n"
 		":param binarizer: the binarizer used to convert image before decoding barcodes.\n"
-		"  Defaults to :py:attr:`zxing.Binarizer.LocalAverage`."
+		"  Defaults to :py:attr:`~zxing.Binarizer.LocalAverage`.\n"
 		":type is_pure: bool\n"
 		":param is_pure: Set to True if the input contains nothing but a perfectly aligned barcode (generated image).\n"
-		"  Speeds up detection in that case. Default is False."
+		"  Speeds up detection in that case. Default is False.\n"
 		":type ean_add_on_symbol: zxing.EanAddOnSymbol\n"
-		":param ean_add_on_symbol: Specify whether to Ignore, Read or Require EAN-2/5 add-on symbols while scanning \n"
-		"  EAN/UPC codes. Default is ``Ignore``.\n"
+		":param ean_add_on_symbol: Specify whether to Ignore, Read or Require EAN-2/5 add-on symbols while scanning\n"
+		"  EAN/UPC codes. Default is :py:attr:`~zxing.EanAddOnSymbol.Ignore`.\n"
+		":return: a zxing result containing decoded symbol if found.\n"
 		":rtype: zxing.Result\n"
-		":return: a zxing result containing decoded symbol if found."
 	);
 	m.def("write_barcode", &write_barcode,
 		py::arg("format"),
@@ -251,10 +254,43 @@ PYBIND11_MODULE(zxing, m)
 		":param height: height (in pixels) of the barcode to create. If undefined (or set to 0), barcode will be\n"
 		"  created with the minimum possible height\n"
 		":type quiet_zone: int\n"
-		":param quiet_zone: minimum size (in pixels) of the quiet zone around barcode. If undefined (or set to -1), \n"
+		":param quiet_zone: minimum size (in pixels) of the quiet zone around barcode. If undefined (or set to -1),\n"
 		"  the minimum quiet zone of respective barcode is used."
 		":type ecc_level: int\n"
-		":param ecc_level: error correction code level (in percent) of the barcode\n"
-		"  (Used for Aztec, PDF417, and QRCode only)."
+		":param ecc_level: error correction code level of the barcode (Used for Aztec, PDF417, and QRCode only).\n"
+		"  Accepted values are in range 0 to 8, and have the following meaning depending on barcode type:\n\n"
+		"  * Aztec: ecc_level value is converted to error correction percentage using ecc_level * 100 / 8. E.g.:\n\n"
+		"    + 0 -> 0%\n"
+		"    + 1 -> 12%\n"
+		"    + 2 -> 25%\n"
+		"    + 3 -> 37%\n"
+		"    + 4 -> 50%\n"
+		"    + 5 -> 62%\n"
+		"    + 6 -> 75%\n"
+		"    + 7 -> 87%\n"
+		"    + 8 -> 100%\n\n"
+		"  * PDF417: the maximum number of corrections that can be made (i.e. the number of codewords added by the \n"
+		"    Reed Solomon error correction algorithm) is defined by 2^(ecc_level+1). E.g.: \n\n"
+		"    + 0: 2 corrections max\n"
+		"    + 1: 4 corrections max\n"
+		"    + 2: 8 corrections max\n"
+		"    + 3: 16 corrections max\n"
+		"    + 4: 32 corrections max\n"
+		"    + 5: 64 corrections max\n"
+		"    + 6: 128 corrections max\n"
+		"    + 7: 256 corrections max\n"
+		"    + 8: 512 corrections max\n\n"
+		"  * QRCode: ecc_value is converted to one of the four QRCode Error Correction level using following mapping:\n\n"
+		"    + 0, 1 or 2 -> Level L (~7%)\n"
+		"    + 3 or 4    -> Level M (~15%)\n"
+		"    + 5 or 6    -> Level Q (~25%)\n"
+		"    + 7 or 8    -> Level H (~30%)\n\n"
+		"  .. warning::\n"
+		"     Values outside 0..8 range are silently ignored and fallback to encoders default value:\n\n"
+		"     * Aztec: 33%\n"
+		"     * PDF417: 2\n"
+		"     * QRCode: Level L (~7%)\n\n"
+		":return: (grayscale) image of the barcode\n"
+		":rtype: numpy.ndarray\n"
 	);
 }

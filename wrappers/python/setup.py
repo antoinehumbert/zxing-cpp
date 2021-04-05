@@ -91,6 +91,7 @@ setup(
     ],
     python_requires=">=3.6",
     install_requires=["numpy"],
+    extra_requires={"doc": ["sphinx", "sphinx_rtd_theme"]},
     ext_modules=[CMakeExtension('zxing')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
